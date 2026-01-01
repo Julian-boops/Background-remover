@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Background Remover</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .checkerboard {
+            background-image: 
+                linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
+                linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
+                linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+        
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        /* Range slider styling with custom gradient */
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 8px;
+            border-radius: 4px;
+            background: linear-gradient(to right, #ef4444, #f97316, #eab308, #22c55e, #3b82f6);
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid #3b82f6;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        
+        /* Sensitivity value colors */
+        .sensitivity-negative {
+            color: #ef4444;
+        }
+        
+        .sensitivity-zero {
+            color: #f97316;
+        }
+        
+        .sensitivity-low {
+            color: #eab308;
+        }
+        
+        .sensitivity-medium {
+            color: #22c55e;
+        }
+        
+        .sensitivity-high {
+            color: #3b82f6;
+        }
+        
+        /* Smooth image rendering */
+        canvas, img {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -o-crisp-edges;
+            -ms-interpolation-mode: nearest-neighbor;
+        }
+        
+        /* Better canvas rendering */
+        canvas {
+            image-rendering: auto;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+        }
+        
+        .smooth-image {
+            image-rendering: auto;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-gray-800 mb-3 bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                Advanced Background Remover
+            </h1>
+            <p class="text-gray-600 max-w-2xl mx-auto">
+                Upload any image and remove the background with precision control. Negative sensitivity selects less, positive selects more.
+            </p>
+        </div>
+
+        <!-- Error Toast -->
+        <div id="errorToast" class="fixed top-4 right-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-lg hidden z-50 max-w-md">
+            <div class="flex items-center">
+                <i class="fas fa-exclamation-circle mr-3"></i>
+                <div class="flex-1">
+                    <p id="errorMessage" class="text-sm"></p>
+                </div>
+                <button onclick="hideError()" class="ml-4 text-red-500 hover:text-red-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Card -->
+        <div class="bg-white rounded-2xl shadow-2xl p-6 mb-8">
+            <!-- Controls Section -->
+            <div class="flex flex-wrap gap-3 mb-8">
+                <!-- Upload Button -->
+                <label class="flex-1 min-w-[200px]">
+                    <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                    <div class="flex items-center justify-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl cursor-pointer hover:from-blue-600 hover:to-blue-700 transition-all duration-300 shadow-md hover:shadow-lg">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span class="font-medium">Upload Image</span>
+                    </div>
+                </label>
+                
+                <!-- Download Button -->
+                <button id="downloadBtn" onclick="handleDownload()" disabled 
+                    class="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-download"></i>
+                    <span class="font-medium">Download PNG</span>
+                </button>
+                
+                <!-- Reset Button -->
+                <button id="resetBtn" onclick="handleReset()" 
+                    class="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl hover:from-gray-600 hover:to-gray-700 transition-all duration-300 shadow-md hover:shadow-lg">
+                    <i class="fas fa-redo"></i>
+                    <span class="font-medium">Reset All</span>
+                </button>
+            </div>
+
+            <!-- Mode Selection -->
+            <div id="modeSection" class="hidden mb-8">
+                <div class="flex flex-wrap gap-3 mb-4">
+                    <button id="autoModeBtn" onclick="switchToAutoMode()" 
+                        class="flex items-center gap-3 px-5 py-3 rounded-xl transition-all duration-300 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md">
+                        <i class="fas fa-magic"></i>
+                        <span class="font-medium">Auto Remove</span>
+                    </button>
+                    
+                    <button id="manualModeBtn" onclick="switchToManualMode()" 
+                        class="flex items-center gap-3 px-5 py-3 rounded-xl transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300 shadow">
+                        <i class="fas fa-mouse-pointer"></i>
+                        <span class="font-medium">Click to Select</span>
+                    </button>
+                </div>
+
+                <!-- Manual Mode Controls -->
+                <div id="manualControls" class="hidden p-5 bg-blue-50 border border-blue-200 rounded-xl mb-6">
+                    <div class="flex flex-wrap gap-3 mb-3">
+                        <button id="removeBgBtn" onclick="setSelectionMode('background')" 
+                            class="px-5 py-2.5 rounded-lg transition-all duration-300 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow">
+                            Remove Background
+                        </button>
+                        <button id="keepSubjectBtn" onclick="setSelectionMode('subject')" 
+                            class="px-5 py-2.5 rounded-lg transition-all duration-300 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 shadow">
+                            Keep Subject
+                        </button>
+                    </div>
+                    <p id="selectionHint" class="text-gray-700">
+                        <i class="fas fa-mouse-pointer text-blue-500 mr-2"></i>
+                        Click on the background areas you want to remove
+                    </p>
+                </div>
+            </div>
+
+            <!-- Settings Section -->
+            <div id="settingsSection" class="hidden space-y-8 mb-8">
+                <!-- Sensitivity -->
+                <div class="bg-gray-50 p-5 rounded-xl border border-gray-200">
+                    <div class="flex items-center justify-between mb-3">
+                        <label class="block text-lg font-semibold text-gray-800">
+                            <i class="fas fa-tachometer-alt text-purple-500 mr-2"></i>
+                            Selection Sensitivity
+                        </label>
+                        <span id="thresholdValue" class="text-2xl font-bold">30</span>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-4">
+                            <span class="text-sm text-gray-500 w-20 text-left">Select Less (-10)</span>
+                            <input type="range" id="thresholdSlider" min="-10" max="80" value="30" step="1"
+                                oninput="handleThresholdChange(this.value)" 
+                                class="flex-1 cursor-pointer">
+                            <span class="text-sm text-gray-500 w-20 text-right">Select More (80)</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <span class="text-sm font-medium text-gray-700">Precise value:</span>
+                                <input type="number" id="thresholdInput" min="-10" max="80" value="30" step="1"
+                                    onchange="handleThresholdChange(this.value)"
+                                    class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center font-semibold">
+                                <button onclick="setSensitivity(-5)" class="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm">
+                                    Less (-5)
+                                </button>
+                                <button onclick="setSensitivity(0)" class="px-3 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors text-sm">
+                                    Exact (0)
+                                </button>
+                                <button onclick="setSensitivity(30)" class="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm">
+                                    Normal (30)
+                                </button>
+                            </div>
+                            <span class="text-sm text-gray-600 hidden sm:block">
+                                <i class="fas fa-info-circle text-blue-500"></i>
+                                Negative = strict, Positive = loose
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Edge Adjustment -->
+                <div class="bg-gray-50 p-5 rounded-xl border border-gray-200">
+                    <div class="flex items-center justify-between mb-3">
+                        <label class="block text-lg font-semibold text-gray-800">
+                            <i class="fas fa-expand-arrows-alt text-blue-500 mr-2"></i>
+                            Edge Adjustment
+                        </label>
+                        <span id="edgeOffsetValue" class="text-2xl font-bold text-blue-600">0 px</span>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-4">
+                            <span class="text-sm text-gray-500 w-16">Shrink</span>
+                            <input type="range" id="edgeOffsetSlider" min="-20" max="20" value="0" step="1"
+                                oninput="handleEdgeOffsetChange(this.value)" 
+                                class="flex-1 cursor-pointer">
+                            <span class="text-sm text-gray-500 w-16">Expand</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <input type="number" id="edgeOffsetInput" min="-20" max="20" value="0" step="1"
+                                onchange="handleEdgeOffsetChange(this.value)"
+                                class="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center font-semibold">
+                            <span class="text-sm text-gray-600">Fine-tune the edges after selection</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Smoothing Options -->
+                <div class="bg-gray-50 p-5 rounded-xl border border-gray-200">
+                    <div class="flex items-center justify-between mb-3">
+                        <label class="block text-lg font-semibold text-gray-800">
+                            <i class="fas fa-sparkles text-purple-500 mr-2"></i>
+                            Edge Smoothing
+                        </label>
+                        <span id="smoothingValue" class="text-2xl font-bold text-purple-600">2 px</span>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-4">
+                            <span class="text-sm text-gray-500 w-16">Off</span>
+                            <input type="range" id="smoothingSlider" min="0" max="10" value="2" step="1"
+                                oninput="handleSmoothingChange(this.value)" 
+                                class="flex-1 cursor-pointer">
+                            <span class="text-sm text-gray-500 w-16">Smooth</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <input type="number" id="smoothingInput" min="0" max="10" value="2" step="1"
+                                onchange="handleSmoothingChange(this.value)"
+                                class="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center font-semibold">
+                            <span class="text-sm text-gray-600">Smooth jagged edges for cleaner results</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="progressContainer" class="hidden mb-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-gray-700 font-medium">Processing...</span>
+                    <span id="progressPercent" class="text-blue-600 font-bold">0%</span>
+                </div>
+                <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
+                    <div id="progressBar" class="h-full bg-gradient-to-r from-blue-500 to-purple-500 progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Image Display Area -->
+            <div id="imageContainer" class="hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Original Image -->
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-image text-blue-500 mr-2"></i>
+                            Original Image
+                        </h3>
+                        <div class="border-2 border-gray-300 rounded-xl overflow-hidden shadow-lg">
+                            <div class="checkerboard">
+                                <img id="originalImage" class="w-full h-auto max-h-[500px] object-contain smooth-image" alt="Original">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Processed Image -->
+                    <div>
+                        <h3 id="processedTitle" class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-wand-magic-sparkles text-purple-500 mr-2"></i>
+                            Background Removed
+                        </h3>
+                        <div class="border-2 border-gray-300 rounded-xl overflow-hidden shadow-lg relative" 
+                             style="cursor: default" id="processedContainer">
+                            <div class="checkerboard absolute inset-0"></div>
+                            <canvas id="displayCanvas" class="w-full h-auto max-h-[500px] object-contain relative z-10"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="text-center py-16">
+                <div class="w-24 h-24 mx-auto mb-6 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-blue-400"></i>
+                </div>
+                <h3 class="text-2xl font-semibold text-gray-700 mb-3">No Image Uploaded</h3>
+                <p class="text-gray-500 max-w-md mx-auto mb-6">
+                    Upload an image (PNG, JPG, or WebP) to start removing the background. Maximum size: 10MB.
+                </p>
+                <label>
+                    <input type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                    <div class="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg cursor-pointer hover:from-blue-600 hover:to-purple-600 transition-all duration-300">
+                        <i class="fas fa-upload"></i>
+                        <span>Choose an Image</span>
+                    </div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Canvases for Processing -->
+    <canvas id="processingCanvas" class="hidden"></canvas>
+    <canvas id="tempCanvas" class="hidden"></canvas>
+
+    <script>
+        // State management
+        const state = {
+            image: null,
+            processedImage: null,
+            edgeOffset: 0,
+            smoothing: 2,
+            isProcessing: false,
+            threshold: 30,
+            mode: 'auto',
+            selectionMode: 'background',
+            history: [],
+            historyIndex: -1,
+            progress: 0,
+            mask: null,
+            originalImageData: null,
+            originalImageSrc: null,
+            debounceTimer: null
+        };
+
+        // DOM Elements
+        const elements = {
+            fileInput: document.getElementById('fileInput'),
+            downloadBtn: document.getElementById('downloadBtn'),
+            resetBtn: document.getElementById('resetBtn'),
+            autoModeBtn: document.getElementById('autoModeBtn'),
+            manualModeBtn: document.getElementById('manualModeBtn'),
+            manualControls: document.getElementById('manualControls'),
+            removeBgBtn: document.getElementById('removeBgBtn'),
+            keepSubjectBtn: document.getElementById('keepSubjectBtn'),
+            selectionHint: document.getElementById('selectionHint'),
+            thresholdSlider: document.getElementById('thresholdSlider'),
+            thresholdInput: document.getElementById('thresholdInput'),
+            thresholdValue: document.getElementById('thresholdValue'),
+            edgeOffsetSlider: document.getElementById('edgeOffsetSlider'),
+            edgeOffsetInput: document.getElementById('edgeOffsetInput'),
+            edgeOffsetValue: document.getElementById('edgeOffsetValue'),
+            smoothingSlider: document.getElementById('smoothingSlider'),
+            smoothingInput: document.getElementById('smoothingInput'),
+            smoothingValue: document.getElementById('smoothingValue'),
+            originalImage: document.getElementById('originalImage'),
+            displayCanvas: document.getElementById('displayCanvas'),
+            processingCanvas: document.getElementById('processingCanvas'),
+            tempCanvas: document.getElementById('tempCanvas'),
+            modeSection: document.getElementById('modeSection'),
+            settingsSection: document.getElementById('settingsSection'),
+            imageContainer: document.getElementById('imageContainer'),
+            emptyState: document.getElementById('emptyState'),
+            progressContainer: document.getElementById('progressContainer'),
+            progressBar: document.getElementById('progressBar'),
+            progressPercent: document.getElementById('progressPercent'),
+            processedTitle: document.getElementById('processedTitle'),
+            processedContainer: document.getElementById('processedContainer'),
+            errorToast: document.getElementById('errorToast'),
+            errorMessage: document.getElementById('errorMessage')
+        };
+
+        // Utility Functions
+        function showError(message) {
+            elements.errorMessage.textContent = message;
+            elements.errorToast.classList.remove('hidden');
+            setTimeout(hideError, 5000);
+        }
+
+        function hideError() {
+            elements.errorToast.classList.add('hidden');
+        }
+
+        function updateProgress(value) {
+            state.progress = value;
+            elements.progressBar.style.width = `${value}%`;
+            elements.progressPercent.textContent = `${Math.round(value)}%`;
+        }
+
+        function showProcessing() {
+            state.isProcessing = true;
+            elements.progressContainer.classList.remove('hidden');
+            updateProgress(0);
+        }
+
+        function hideProcessing() {
+            state.isProcessing = false;
+            elements.progressContainer.classList.add('hidden');
+            updateProgress(0);
+        }
+
+        // FIXED: Improved Flood Fill Algorithm
+        function floodFill(data, width, height, startX, startY, targetColor, sensitivity) {
+            const visited = new Uint8Array(width * height);
+            const stack = [[startX, startY]];
+            const mask = new Uint8Array(width * height).fill(255);
+            
+            // Convert sensitivity to tolerance (0-255 scale)
+            let tolerance;
+            if (sensitivity < 0) {
+                // Negative sensitivity: very strict (0-10 tolerance)
+                tolerance = Math.max(1, Math.floor(10 + sensitivity));
+            } else if (sensitivity === 0) {
+                // Zero sensitivity: exact match only
+                tolerance = 0;
+            } else {
+                // Positive sensitivity: normal to loose
+                tolerance = Math.min(100, sensitivity);
+            }
+            
+            const colorMatch = (x, y) => {
+                const idx = (y * width + x) * 4;
+                const r = data[idx];
+                const g = data[idx + 1];
+                const b = data[idx + 2];
+                
+                // Calculate color distance (0-255 scale)
+                const dr = Math.abs(r - targetColor[0]);
+                const dg = Math.abs(g - targetColor[1]);
+                const db = Math.abs(b - targetColor[2]);
+                
+                // Use max distance instead of sum for better results
+                const maxDist = Math.max(dr, dg, db);
+                return maxDist <= tolerance;
+            };
+            
+            while (stack.length > 0) {
+                const [x, y] = stack.pop();
+                const idx = y * width + x;
+                
+                if (visited[idx]) continue;
+                if (x < 0 || x >= width || y < 0 || y >= height) continue;
+                if (!colorMatch(x, y)) continue;
+                
+                visited[idx] = 1;
+                mask[idx] = 0;
+                
+                // Add neighbors with bounds checking
+                if (x + 1 < width) stack.push([x + 1, y]);
+                if (x - 1 >= 0) stack.push([x - 1, y]);
+                if (y + 1 < height) stack.push([x, y + 1]);
+                if (y - 1 >= 0) stack.push([x, y - 1]);
+            }
+            
+            return mask;
+        }
+
+        // FIXED: Clean mask application with proper transparency
+        function applyMaskWithOffset(offset, smoothing) {
+            if (!state.mask || !state.originalImageData) return;
+            
+            showProcessing();
+            
+            setTimeout(() => {
+                try {
+                    const ctx = elements.processingCanvas.getContext('2d', { willReadFrequently: true });
+                    const tempCtx = elements.tempCanvas.getContext('2d', { willReadFrequently: true });
+                    const width = elements.processingCanvas.width;
+                    const height = elements.processingCanvas.height;
+                    
+                    // Set canvas dimensions
+                    elements.tempCanvas.width = width;
+                    elements.tempCanvas.height = height;
+                    
+                    // Start with original image
+                    ctx.putImageData(state.originalImageData, 0, 0);
+                    
+                    // Get current image data
+                    const imageData = ctx.getImageData(0, 0, width, height);
+                    const data = imageData.data;
+                    
+                    // Apply current mask
+                    let mask = state.mask;
+                    
+                    // Apply edge offset if needed
+                    if (offset !== 0) {
+                        mask = applyMorphologicalOperation(mask, width, height, Math.abs(offset), offset > 0);
+                    }
+                    
+                    // Apply smoothing if needed
+                    if (smoothing > 0) {
+                        mask = applySmoothing(mask, width, height, smoothing);
+                    }
+                    
+                    // Create clean transparent image
+                    tempCtx.clearRect(0, 0, width, height);
+                    
+                    // Draw original image to temp canvas
+                    tempCtx.putImageData(state.originalImageData, 0, 0);
+                    const tempData = tempCtx.getImageData(0, 0, width, height);
+                    const tempPixels = tempData.data;
+                    
+                    // Apply transparency based on mask
+                    for (let i = 0; i < mask.length; i++) {
+                        const alphaIdx = i * 4 + 3;
+                        tempPixels[alphaIdx] = mask[i]; // 0 = transparent, 255 = opaque
+                    }
+                    
+                    tempCtx.putImageData(tempData, 0, 0);
+                    
+                    // Clear processing canvas and draw the result
+                    ctx.clearRect(0, 0, width, height);
+                    ctx.drawImage(elements.tempCanvas, 0, 0);
+                    
+                    // Update display canvas
+                    elements.displayCanvas.width = width;
+                    elements.displayCanvas.height = height;
+                    const displayCtx = elements.displayCanvas.getContext('2d');
+                    displayCtx.clearRect(0, 0, width, height);
+                    displayCtx.drawImage(elements.processingCanvas, 0, 0);
+                    
+                    // Save processed image for download
+                    state.processedImage = elements.processingCanvas.toDataURL('image/png');
+                    
+                    hideProcessing();
+                    elements.downloadBtn.disabled = false;
+                    
+                } catch (error) {
+                    console.error('Mask application error:', error);
+                    showError('Failed to process image. Please try again.');
+                    hideProcessing();
+                }
+            }, 50);
+        }
+
+        // Improved morphological operation
+        function applyMorphologicalOperation(mask, width, height, radius, expand) {
+            const result = new Uint8Array(mask.length);
+            
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = y * width + x;
+                    
+                    if (expand) {
+                        // Expand: if any neighbor is opaque, make this pixel opaque
+                        let isOpaque = false;
+                        for (let dy = -radius; dy <= radius && !isOpaque; dy++) {
+                            for (let dx = -radius; dx <= radius && !isOpaque; dx++) {
+                                const nx = x + dx;
+                                const ny = y + dy;
+                                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                    if (mask[ny * width + nx] === 255) {
+                                        isOpaque = true;
+                                    }
+                                }
+                            }
+                        }
+                        result[idx] = isOpaque ? 255 : 0;
+                    } else {
+                        // Shrink: if any neighbor is transparent, make this pixel transparent
+                        let isTransparent = false;
+                        for (let dy = -radius; dy <= radius && !isTransparent; dy++) {
+                            for (let dx = -radius; dx <= radius && !isTransparent; dx++) {
+                                const nx = x + dx;
+                                const ny = y + dy;
+                                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                    if (mask[ny * width + nx] === 0) {
+                                        isTransparent = true;
+                                    }
+                                }
+                            }
+                        }
+                        result[idx] = isTransparent ? 0 : 255;
+                    }
+                }
+            }
+            
+            return result;
+        }
+
+        // NEW: Edge smoothing function
+        function applySmoothing(mask, width, height, radius) {
+            const result = new Uint8Array(mask.length);
+            
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = y * width + x;
+                    const current = mask[idx];
+                    
+                    if (current === 0 || current === 255) {
+                        // Count opaque and transparent neighbors
+                        let opaqueCount = 0;
+                        let transparentCount = 0;
+                        let totalCount = 0;
+                        
+                        for (let dy = -radius; dy <= radius; dy++) {
+                            for (let dx = -radius; dx <= radius; dx++) {
+                                const nx = x + dx;
+                                const ny = y + dy;
+                                
+                                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                    const neighbor = mask[ny * width + nx];
+                                    if (neighbor === 255) opaqueCount++;
+                                    else if (neighbor === 0) transparentCount++;
+                                    totalCount++;
+                                }
+                            }
+                        }
+                        
+                        // Apply smoothing at edges
+                        if (current === 0 && opaqueCount > transparentCount * 2) {
+                            // Mostly opaque neighbors, make this opaque
+                            result[idx] = 255;
+                        } else if (current === 255 && transparentCount > opaqueCount * 2) {
+                            // Mostly transparent neighbors, make this transparent
+                            result[idx] = 0;
+                        } else {
+                            // Keep original
+                            result[idx] = current;
+                        }
+                    } else {
+                        result[idx] = current;
+                    }
+                }
+            }
+            
+            return result;
+        }
+
+        // FIXED: Clean image processing
+        function processImageAuto(img, offset, sensitivity) {
+            showProcessing();
+            
+            setTimeout(() => {
+                try {
+                    // Clear previous data
+                    const ctx = elements.processingCanvas.getContext('2d', { willReadFrequently: true });
+                    
+                    // Set canvas dimensions to match image
+                    elements.processingCanvas.width = img.width;
+                    elements.processingCanvas.height = img.height;
+                    
+                    // Clear canvas and draw image
+                    ctx.clearRect(0, 0, img.width, img.height);
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Get image data
+                    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                    state.originalImageData = imageData;
+                    const data = imageData.data;
+                    
+                    // Sample multiple points for better background detection
+                    const samplePoints = [
+                        [0, 0],                    // Top-left
+                        [img.width - 1, 0],        // Top-right
+                        [0, img.height - 1],       // Bottom-left
+                        [img.width - 1, img.height - 1], // Bottom-right
+                        [Math.floor(img.width / 2), 0], // Top-center
+                        [0, Math.floor(img.height / 2)], // Left-center
+                    ];
+                    
+                    // Start with first point as background
+                    const firstIdx = 0;
+                    const bgColor = [
+                        data[firstIdx * 4],
+                        data[firstIdx * 4 + 1],
+                        data[firstIdx * 4 + 2]
+                    ];
+                    
+                    let mask = floodFill(data, img.width, img.height, 0, 0, bgColor, sensitivity);
+                    
+                    // Combine masks from multiple sample points
+                    for (const [x, y] of samplePoints) {
+                        const idx = (y * img.width + x) * 4;
+                        const pointColor = [data[idx], data[idx + 1], data[idx + 2]];
+                        const pointMask = floodFill(data, img.width, img.height, x, y, pointColor, sensitivity);
+                        
+                        // Combine: if point mask says transparent, make it transparent
+                        for (let i = 0; i < mask.length; i++) {
+                            if (pointMask[i] === 0) mask[i] = 0;
+                        }
+                    }
+                    
+                    state.mask = mask;
+                    applyMaskWithOffset(offset, state.smoothing);
+                    
+                } catch (error) {
+                    console.error('Auto processing error:', error);
+                    showError('Failed to remove background. Please try adjusting sensitivity.');
+                    hideProcessing();
+                }
+            }, 100);
+        }
+
+        // Event Handlers
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    // Limit size for performance
+                    let width = img.width;
+                    let height = img.height;
+                    const maxDimension = 1500;
+                    
+                    if (width > maxDimension || height > maxDimension) {
+                        const ratio = Math.min(maxDimension / width, maxDimension / height);
+                        width = Math.floor(width * ratio);
+                        height = Math.floor(height * ratio);
+                        
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const resizedImg = new Image();
+                        resizedImg.src = canvas.toDataURL();
+                        resizedImg.onload = () => {
+                            initializeImage(resizedImg);
+                        };
+                    } else {
+                        initializeImage(img);
+                    }
+                };
+                img.onerror = () => showError('Failed to load image.');
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function initializeImage(img) {
+            state.image = img;
+            state.edgeOffset = 0;
+            state.smoothing = 2;
+            state.threshold = 30;
+            state.mode = 'auto';
+            
+            // Update UI
+            elements.originalImage.src = img.src;
+            elements.emptyState.classList.add('hidden');
+            elements.modeSection.classList.remove('hidden');
+            elements.settingsSection.classList.remove('hidden');
+            elements.imageContainer.classList.remove('hidden');
+            elements.downloadBtn.disabled = true;
+            
+            // Reset controls
+            elements.thresholdSlider.value = 30;
+            elements.thresholdInput.value = 30;
+            elements.thresholdValue.textContent = '30';
+            elements.edgeOffsetSlider.value = 0;
+            elements.edgeOffsetInput.value = 0;
+            elements.edgeOffsetValue.textContent = '0 px';
+            elements.smoothingSlider.value = 2;
+            elements.smoothingInput.value = 2;
+            elements.smoothingValue.textContent = '2 px';
+            
+            switchToAutoMode();
+            processImageAuto(img, 0, state.threshold);
+        }
+
+        function handleThresholdChange(value) {
+            const intValue = parseInt(value);
+            if (isNaN(intValue) || intValue < -10 || intValue > 80) return;
+            
+            state.threshold = intValue;
+            elements.thresholdSlider.value = intValue;
+            elements.thresholdInput.value = intValue;
+            elements.thresholdValue.textContent = intValue;
+            
+            clearTimeout(state.debounceTimer);
+            state.debounceTimer = setTimeout(() => {
+                if (state.image && state.mode === 'auto') {
+                    processImageAuto(state.image, state.edgeOffset, state.threshold);
+                }
+            }, 300);
+        }
+
+        function handleEdgeOffsetChange(value) {
+            const intValue = parseInt(value);
+            if (isNaN(intValue) || intValue < -20 || intValue > 20) return;
+            
+            state.edgeOffset = intValue;
+            elements.edgeOffsetSlider.value = intValue;
+            elements.edgeOffsetInput.value = intValue;
+            elements.edgeOffsetValue.textContent = `${intValue > 0 ? '+' : ''}${intValue} px`;
+            
+            clearTimeout(state.debounceTimer);
+            state.debounceTimer = setTimeout(() => {
+                if (state.mask) {
+                    applyMaskWithOffset(intValue, state.smoothing);
+                }
+            }, 200);
+        }
+
+        function handleSmoothingChange(value) {
+            const intValue = parseInt(value);
+            if (isNaN(intValue) || intValue < 0 || intValue > 10) return;
+            
+            state.smoothing = intValue;
+            elements.smoothingSlider.value = intValue;
+            elements.smoothingInput.value = intValue;
+            elements.smoothingValue.textContent = `${intValue} px`;
+            
+            clearTimeout(state.debounceTimer);
+            state.debounceTimer = setTimeout(() => {
+                if (state.mask) {
+                    applyMaskWithOffset(state.edgeOffset, intValue);
+                }
+            }, 200);
+        }
+
+        function setSensitivity(value) {
+            handleThresholdChange(value);
+        }
+
+        function switchToAutoMode() {
+            state.mode = 'auto';
+            elements.autoModeBtn.className = 'flex items-center gap-3 px-5 py-3 rounded-xl transition-all duration-300 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md';
+            elements.manualModeBtn.className = 'flex items-center gap-3 px-5 py-3 rounded-xl transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300 shadow';
+            elements.manualControls.classList.add('hidden');
+            elements.processedContainer.style.cursor = 'default';
+            
+            if (state.image) {
+                processImageAuto(state.image, state.edgeOffset, state.threshold);
+            }
+        }
+
+        function switchToManualMode() {
+            state.mode = 'manual';
+            elements.manualModeBtn.className = 'flex items-center gap-3 px-5 py-3 rounded-xl transition-all duration-300 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md';
+            elements.autoModeBtn.className = 'flex items-center gap-3 px-5 py-3 rounded-xl transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300 shadow';
+            elements.manualControls.classList.remove('hidden');
+            elements.processedContainer.style.cursor = 'crosshair';
+            elements.processedTitle.innerHTML = '<i class="fas fa-mouse-pointer text-blue-500 mr-2"></i>Click to Select Areas';
+            
+            // Reset to show original image for manual selection
+            if (state.image) {
+                elements.displayCanvas.width = state.image.width;
+                elements.displayCanvas.height = state.image.height;
+                const ctx = elements.displayCanvas.getContext('2d');
+                ctx.drawImage(state.image, 0, 0);
+                state.mask = null;
+                elements.downloadBtn.disabled = true;
+            }
+        }
+
+        function setSelectionMode(mode) {
+            state.selectionMode = mode;
+            if (mode === 'background') {
+                elements.removeBgBtn.className = 'px-5 py-2.5 rounded-lg transition-all duration-300 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow';
+                elements.keepSubjectBtn.className = 'px-5 py-2.5 rounded-lg transition-all duration-300 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 shadow';
+                elements.selectionHint.innerHTML = '<i class="fas fa-mouse-pointer text-blue-500 mr-2"></i>Click on the background areas you want to remove';
+            } else {
+                elements.keepSubjectBtn.className = 'px-5 py-2.5 rounded-lg transition-all duration-300 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow';
+                elements.removeBgBtn.className = 'px-5 py-2.5 rounded-lg transition-all duration-300 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 shadow';
+                elements.selectionHint.innerHTML = '<i class="fas fa-mouse-pointer text-blue-500 mr-2"></i>Click on the subject you want to keep';
+            }
+        }
+
+        function handleCanvasClick(event) {
+            if (state.mode !== 'manual' || !state.image || state.isProcessing) return;
+            
+            const rect = elements.displayCanvas.getBoundingClientRect();
+            const scaleX = state.image.width / rect.width;
+            const scaleY = state.image.height / rect.height;
+            const x = Math.floor((event.clientX - rect.left) * scaleX);
+            const y = Math.floor((event.clientY - rect.top) * scaleY);
+            
+            showProcessing();
+            
+            setTimeout(() => {
+                try {
+                    if (!state.originalImageData) {
+                        // Get original image data
+                        const ctx = elements.processingCanvas.getContext('2d');
+                        elements.processingCanvas.width = state.image.width;
+                        elements.processingCanvas.height = state.image.height;
+                        ctx.drawImage(state.image, 0, 0);
+                        state.originalImageData = ctx.getImageData(0, 0, state.image.width, state.image.height);
+                    }
+                    
+                    const data = state.originalImageData.data;
+                    const idx = (y * state.image.width + x) * 4;
+                    const clickedColor = [data[idx], data[idx + 1], data[idx + 2]];
+                    
+                    const newMask = floodFill(
+                        data,
+                        state.image.width,
+                        state.image.height,
+                        x,
+                        y,
+                        clickedColor,
+                        state.threshold
+                    );
+                    
+                    if (state.selectionMode === 'subject') {
+                        // Invert for subject selection
+                        for (let i = 0; i < newMask.length; i++) {
+                            newMask[i] = newMask[i] === 0 ? 255 : 0;
+                        }
+                    }
+                    
+                    // Initialize or combine mask
+                    if (!state.mask) {
+                        state.mask = newMask;
+                    } else {
+                        for (let i = 0; i < newMask.length; i++) {
+                            if (newMask[i] === 0) state.mask[i] = 0;
+                        }
+                    }
+                    
+                    applyMaskWithOffset(state.edgeOffset, state.smoothing);
+                    
+                } catch (error) {
+                    console.error('Manual selection error:', error);
+                    showError('Failed to select area. Please try again.');
+                    hideProcessing();
+                }
+            }, 50);
+        }
+
+        // FIXED: Download function
+        function handleDownload() {
+            try {
+                if (!state.processedImage) {
+                    showError('No processed image available.');
+                    return;
+                }
+                
+                const link = document.createElement('a');
+                link.href = state.processedImage;
+                link.download = `background-removed-${Date.now()}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+            } catch (error) {
+                console.error('Download error:', error);
+                showError('Failed to download. Please try again.');
+            }
+        }
+
+        function handleReset() {
+            state.image = null;
+            state.processedImage = null;
+            state.edgeOffset = 0;
+            state.smoothing = 2;
+            state.threshold = 30;
+            state.mode = 'auto';
+            state.selectionMode = 'background';
+            state.mask = null;
+            state.originalImageData = null;
+            
+            // Clear UI
+            elements.emptyState.classList.remove('hidden');
+            elements.modeSection.classList.add('hidden');
+            elements.settingsSection.classList.add('hidden');
+            elements.imageContainer.classList.add('hidden');
+            elements.downloadBtn.disabled = true;
+            
+            // Reset controls
+            elements.thresholdSlider.value = 30;
+            elements.thresholdInput.value = 30;
+            elements.thresholdValue.textContent = '30';
+            elements.edgeOffsetSlider.value = 0;
+            elements.edgeOffsetInput.value = 0;
+            elements.edgeOffsetValue.textContent = '0 px';
+            elements.smoothingSlider.value = 2;
+            elements.smoothingInput.value = 2;
+            elements.smoothingValue.textContent = '2 px';
+            
+            // Clear canvases
+            elements.processingCanvas.width = 0;
+            elements.processingCanvas.height = 0;
+            elements.displayCanvas.width = 0;
+            elements.displayCanvas.height = 0;
+            elements.tempCanvas.width = 0;
+            elements.tempCanvas.height = 0;
+            
+            // Clear file input
+            if (elements.fileInput) {
+                elements.fileInput.value = '';
+            }
+        }
+
+        // Initialize
+        elements.displayCanvas.addEventListener('click', handleCanvasClick);
+        
+        // Initialize sensitivity display
+        elements.thresholdValue.textContent = '30';
+        
+        console.log('Background Remover initialized with clean transparency.');
+    </script>
+</body>
+</html>
